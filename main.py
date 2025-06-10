@@ -10,7 +10,6 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is not set!")
 
 sent_links = set()
-
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 async def fetch_jobs_stepstone():
@@ -18,26 +17,31 @@ async def fetch_jobs_stepstone():
     resp = requests.get(url, headers=HEADERS)
     soup = BeautifulSoup(resp.text, 'html.parser')
     jobs = []
-    for card in soup.find_all('article', class_='job-card'):
-        link_tag = card.find('a', href=True)
-        if not link_tag:
+    # Шукаємо всі посилання на вакансії в списку
+    for a in soup.select('a.JobCardStyled_link__1Zd4Z'):  # приклад селектора для посилань вакансій
+        link = a.get('href')
+        if not link:
             continue
-        link = "https://www.stepstone.de" + link_tag['href']
+        if not link.startswith('http'):
+            link = "https://www.stepstone.de" + link
         if link in sent_links:
             continue
-        title = card.find('h2').get_text(strip=True)
-        company = card.find('div', class_='job-company')
-        company = company.get_text(strip=True) if company else 'N/A'
-        location = card.find('div', class_='job-location')
-        location = location.get_text(strip=True) if location else 'N/A'
-        # Опис беремо з сторінки вакансії
+        title = a.get_text(strip=True)
+        # Для компанії і локації робимо запит на сторінку вакансії
         try:
             job_resp = requests.get(link, headers=HEADERS)
             job_soup = BeautifulSoup(job_resp.text, 'html.parser')
-            desc_tag = job_soup.find('div', class_='job-description')
-            description = desc_tag.get_text(separator=' ', strip=True)[:300] if desc_tag else 'No description'
-        except:
+            company = job_soup.select_one('div.JobDetailsCompany_name__2fQ3E')  # приклад
+            company = company.get_text(strip=True) if company else 'N/A'
+            location = job_soup.select_one('span.JobDetailsLocation_location__1u5uK')
+            location = location.get_text(strip=True) if location else 'N/A'
+            description = job_soup.select_one('div.JobDetails_description__3f1nB')
+            description = description.get_text(separator=' ', strip=True)[:300] if description else 'No description'
+        except Exception:
+            company = 'N/A'
+            location = 'N/A'
             description = 'No description'
+
         jobs.append({
             'title': title,
             'company': company,
@@ -55,25 +59,32 @@ async def fetch_jobs_bundesagentur():
     resp = requests.get(url, headers=HEADERS)
     soup = BeautifulSoup(resp.text, 'html.parser')
     jobs = []
-    for card in soup.find_all('div', class_='job-card'):
-        link_tag = card.find('a', class_='job-title', href=True)
-        if not link_tag:
+    # На цьому сайті шукаємо вакансії за тегом <a> з класом job-title
+    for a in soup.select('a.job-title'):
+        link = a.get('href')
+        if not link:
             continue
-        link = link_tag['href']
         if not link.startswith('http'):
             link = "https://www.arbeitsagentur.de" + link
         if link in sent_links:
             continue
-        title = link_tag.get_text(strip=True)
-        location_tag = card.find('span', class_='job-location')
-        location = location_tag.get_text(strip=True) if location_tag else 'N/A'
+        title = a.get_text(strip=True)
+        # Локація
+        parent = a.find_parent('div', class_='job-card')
+        location = 'N/A'
+        if parent:
+            loc_span = parent.select_one('span.job-location')
+            if loc_span:
+                location = loc_span.get_text(strip=True)
+        # Опис з окремої сторінки
         try:
             job_resp = requests.get(link, headers=HEADERS)
             job_soup = BeautifulSoup(job_resp.text, 'html.parser')
-            desc_tag = job_soup.find('div', class_='job-description')
-            description = desc_tag.get_text(separator=' ', strip=True)[:300] if desc_tag else 'No description'
-        except:
+            description = job_soup.select_one('div.job-description')
+            description = description.get_text(separator=' ', strip=True)[:300] if description else 'No description'
+        except Exception:
             description = 'No description'
+
         jobs.append({
             'title': title,
             'company': 'N/A',
