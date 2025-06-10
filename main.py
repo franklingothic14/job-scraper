@@ -9,6 +9,9 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is not set!")
 
+# Глобальний сет для збереження посилань на вже надіслані вакансії
+sent_job_links = set()
+
 async def scrape_stepstone():
     url = "https://www.stepstone.de/jobs/motion-designer/in-deutschland"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -23,6 +26,8 @@ async def scrape_stepstone():
         title = title_tag.get_text(strip=True)
         link_tag = job_card.find('a', href=True)
         link = "https://www.stepstone.de" + link_tag['href'] if link_tag else ''
+        if link in sent_job_links:
+            continue  # Пропускаємо вже надіслані вакансії
         company = job_card.find('div', class_='job-company').get_text(strip=True) if job_card.find('div', class_='job-company') else ''
         location = job_card.find('div', class_='job-location').get_text(strip=True) if job_card.find('div', class_='job-location') else ''
         
@@ -71,6 +76,8 @@ async def scrape_bundesagentur():
         link = title_tag['href']
         if not link.startswith('http'):
             link = "https://www.arbeitsagentur.de" + link
+        if link in sent_job_links:
+            continue  # Пропускаємо вже надіслані вакансії
         location_tag = job_card.find('span', class_='job-location')
         location = location_tag.get_text(strip=True) if location_tag else ''
         
@@ -135,12 +142,17 @@ async def search_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Помилка при скрейпінгу Bundesagentur: {e}")
 
     if not jobs:
-        await update.message.reply_text("Вакансії не знайдені.")
+        await update.message.reply_text("Вакансії не знайдені або всі вакансії вже були надіслані.")
         return
 
-    for job in jobs[:5]:
+    count = 0
+    for job in jobs:
+        if count >= 5:
+            break
         msg = format_job_message(job)
         await update.message.reply_markdown(msg)
+        sent_job_links.add(job['link'])  # Запам’ятовуємо надіслане посилання
+        count += 1
         await asyncio.sleep(1)
 
 def main():
