@@ -2,18 +2,17 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from googletrans import Translator
-import time
+import asyncio
 
-# Зчитуємо токен з environment variable
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is not set!")
 
 translator = Translator()
 
-def scrape_stepstone():
+async def scrape_stepstone():
     url = "https://www.stepstone.de/jobs/motion-designer/in-deutschland"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
@@ -38,7 +37,7 @@ def scrape_stepstone():
                 desc_tag = job_soup.find('div', class_='job-description')
                 if desc_tag:
                     description = desc_tag.get_text(separator=' ', strip=True)[:300]
-                time.sleep(1)
+                await asyncio.sleep(1)
             except Exception:
                 description = ''
         
@@ -66,7 +65,7 @@ def scrape_stepstone():
         })
     return jobs
 
-def scrape_bundesagentur():
+async def scrape_bundesagentur():
     url = "https://www.arbeitsagentur.de/jobsuche/suche?was=motion+designer&wo=Deutschland"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
@@ -91,7 +90,7 @@ def scrape_bundesagentur():
             desc_tag = job_soup.find('div', class_='job-description')
             if desc_tag:
                 description = desc_tag.get_text(separator=' ', strip=True)[:300]
-            time.sleep(1)
+            await asyncio.sleep(1)
         except Exception:
             description = ''
 
@@ -131,41 +130,41 @@ def format_job_message(job):
     )
     return msg
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Привіт! Я бот для пошуку вакансій по моушен дизайну в Німеччині.\n"
-                              "Введи /search для пошуку вакансій.")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Привіт! Я бот для пошуку вакансій по моушен дизайну в Німеччині.\n"
+        "Введи /search для пошуку вакансій."
+    )
 
-def search_jobs(update: Update, context: CallbackContext):
-    update.message.reply_text("Пошук вакансій на StepStone та Bundesagentur für Arbeit... Це може зайняти кілька секунд.")
+async def search_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Пошук вакансій на StepStone та Bundesagentur für Arbeit... Це може зайняти кілька секунд.")
     jobs = []
     try:
-        jobs += scrape_stepstone()
+        jobs += await scrape_stepstone()
     except Exception as e:
-        update.message.reply_text(f"Помилка при скрейпінгу StepStone: {e}")
+        await update.message.reply_text(f"Помилка при скрейпінгу StepStone: {e}")
 
     try:
-        jobs += scrape_bundesagentur()
+        jobs += await scrape_bundesagentur()
     except Exception as e:
-        update.message.reply_text(f"Помилка при скрейпінгу Bundesagentur: {e}")
+        await update.message.reply_text(f"Помилка при скрейпінгу Bundesagentur: {e}")
 
     if not jobs:
-        update.message.reply_text("Вакансії не знайдені.")
+        await update.message.reply_text("Вакансії не знайдені.")
         return
 
     for job in jobs[:5]:
         msg = format_job_message(job)
-        update.message.reply_markdown(msg)
-        time.sleep(1)
+        await update.message.reply_markdown(msg)
+        await asyncio.sleep(1)
 
 def main():
-    updater = Updater(BOT_TOKEN)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("search", search_jobs))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("search", search_jobs))
 
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == '__main__':
     main()
