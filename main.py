@@ -18,7 +18,6 @@ async def fetch_jobs_stepstone():
     resp = requests.get(STEPSTONE_URL, headers=HEADERS)
     soup = BeautifulSoup(resp.text, 'html.parser')
     jobs = []
-    # Знайти всі вакансії за посиланнями (онови селектор під актуальний HTML)
     for a in soup.find_all('a', href=True):
         link = a['href']
         if not link.startswith('/stellenangebote--'):
@@ -29,43 +28,21 @@ async def fetch_jobs_stepstone():
         title = a.get_text(strip=True)
         if "design" not in title.lower():
             continue
-        # Додатково можна отримати опис із сторінки вакансії
-        try:
-            job_resp = requests.get(full_link, headers=HEADERS)
-            job_soup = BeautifulSoup(job_resp.text, 'html.parser')
-            description_tag = job_soup.find('div', {'data-at': 'job-ad-description'})
-            description = description_tag.get_text(separator=' ', strip=True)[:300] if description_tag else ''
-            if "design" not in description.lower() and "design" not in title.lower():
-                continue
-        except Exception:
-            description = ''
         jobs.append({
             'title': title,
-            'company': 'N/A',
-            'location': 'N/A',
-            'description': description,
             'link': full_link
         })
         if len(jobs) >= 5:
             break
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
     return jobs
 
 def format_message(job):
-    return (
-        f"📝 *{job['title']}*\n"
-        f"🏢 Company: {job['company']}\n"
-        f"📍 Location: {job['location']}\n"
-        f"💼 Work format: Remote / Office (check job link)\n"
-        f"🗣 Language: English or German (check job link)\n"
-        f"💰 Compensation: Not specified\n"
-        f"📄 Description: {job['description']}\n"
-        f"🔗 [Job link]({job['link']})"
-    )
+    return f"📝 *{job['title']}*\n🔗 [Посилання]({job['link']})"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привіт! Я бот для пошуку вакансій Motion/Design на StepStone (тільки англомовна сторінка, ключове слово 'design').\n"
+        "Привіт! Я бот для пошуку вакансій Motion/Design на StepStone.\n"
         "Введи /search для пошуку."
     )
 
@@ -81,14 +58,10 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Вакансії не знайдені або всі вже були надіслані.")
         return
 
-    count = 0
     for job in jobs:
-        if count >= 5:
-            break
         await update.message.reply_markdown(format_message(job))
         sent_links.add(job['link'])
-        count += 1
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
