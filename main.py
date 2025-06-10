@@ -3,14 +3,11 @@ import requests
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from googletrans import Translator
 import asyncio
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is not set!")
-
-translator = Translator()
 
 async def scrape_stepstone():
     url = "https://www.stepstone.de/jobs/motion-designer/in-deutschland"
@@ -41,13 +38,7 @@ async def scrape_stepstone():
             except Exception:
                 description = ''
         
-        if description:
-            try:
-                description_en = translator.translate(description, dest='en').text
-            except Exception:
-                description_en = description
-        else:
-            description_en = 'No description available'
+        description_en = description if description else 'No description available'
 
         work_format = "Remote / Office (check job link)"
         compensation = "Not specified"
@@ -94,13 +85,7 @@ async def scrape_bundesagentur():
         except Exception:
             description = ''
 
-        if description:
-            try:
-                description_en = translator.translate(description, dest='en').text
-            except Exception:
-                description_en = description
-        else:
-            description_en = 'No description available'
+        description_en = description if description else 'No description available'
 
         work_format = "Remote / Office (check job link)"
         compensation = "Not specified"
